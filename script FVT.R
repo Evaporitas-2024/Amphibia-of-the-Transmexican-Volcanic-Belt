@@ -222,8 +222,137 @@ print(Mantelbetataxo)
 mantel_corrBetatotal <- mantel.correlog(Beta.taxo$beta.sor, matriz_km, nperm = 999)
 plot(mantel_corrBetatotal)
 
+###Vias de menor costo een TopoDistance###
 
-###Calcular el factor de inflación de varianza para eliminar las variables correlacionadas###
+library(raster)
+library(sp)
+library(sf)
+library(stats)
+library(topoDistance)
+library(matrixcalc)
+library(tidyverse)
+library(otuSummary)
+library(dbplyr)
+library(dplyr)
+
+DEM <- raster("dem fvt 2.tif")
+plot(DEM)
+
+
+BIO6=raster("BIO 6 actual.tif")
+BIO6D=raster("BIO6D.tif")
+plot(BIO6D)
+
+
+template<- projectRaster(from = BIO6, to =DEM, alignOnly = TRUE) 
+
+
+
+DEMp= projectRaster(from = DEM, to = template)
+Bio6p=projectRaster(from=BIO6, to=template)
+Bio6Dp=projectRaster(from=BIO6D, to=template)
+
+
+points_shp <- st_read("puntos.shp")
+
+points_sp <- as(points_shp, "Spatial")
+
+
+resBio6p <- topoLCP(DEM = DEMp, costSurface = Bio6p, pts = points_sp, directions=8,paths = FALSE)
+
+
+resBio6Dp <- topoLCP(DEM = DEMp, costSurface = Bio6Dp, pts = points_sp, directions=8,paths = FALSE)
+
+
+matrizBio6p=as.matrix(resBio6p)
+
+mtruppbio6p<-upper.triangle(matrizBio6p)
+
+bio6Res<-matrixConvert(mtruppbio6p, colname=c("cell1", "cell2", "bio6"))
+
+Resisbio6<-bio6Res%>% mutate(cell1=NULL, cell2=NULL, comparacion=paste0(bio6Res$cell1, -bio6Res$cell2)) %>% relocate(comparacion, .before = bio6)
+Resisbio6$comparacion <- gsub("([0-9]+)-([0-9]+)", "C\\1C\\2",Resisbio6$comparacion)
+
+
+matrizBio6Dp=as.matrix(resBio6Dp)
+
+mtrupp<-upper.triangle(matrizBio6Dp)
+
+#Convertir la parte alta de la matriz en un data.frame
+bio6DRes<-matrixConvert(mtrupp, colname=c("cell1", "cell2", "bio6D"))
+
+Resisbio6DRes<-bio6DRes%>% mutate(cell1=NULL, cell2=NULL, comparacion=paste0(bio6DRes$cell1, -bio6DRes$cell2)) %>% relocate(comparacion, .before = bio6D)
+Resisbio6DRes$comparacion <- gsub("([0-9]+)-([0-9]+)", "C\\1C\\2",Resisbio6DRes$comparacion)
+
+
+
+dist<-read.csv("disgeo.csv", header=T)
+
+
+dist<-dist %>% remove_rownames %>% column_to_rownames(var="X") 
+
+distM<-as.matrix(dist)
+
+
+distUp<-upper.triangle(distM)
+
+dist2<-matrixConvert(distM, colname=c("cell1", "cell2", "dist"))
+
+
+
+distGeo<- dist2 %>% mutate(cell1=NULL, cell2=NULL, comparacion=paste0(dist2$cell1, dist2$cell2)) %>% relocate(comparacion, .before = dist)
+
+Beta_tx<-read.csv("Betataxo_sor_index.csv", header=T) 
+Beta_tx<-Beta_tx %>% remove_rownames %>% column_to_rownames(var="X")
+Beta_tx<-as.matrix(Beta_tx)
+Beta_txLow<-lower.triangle(Beta_tx)
+Beta_tx2<-matrixConvert(Beta_tx, colname=c("cell1", "cell2", "betatax") )
+
+
+Beta_tx.turn<-read.csv("Betataxo_turn_index.csv", header=T) 
+Beta_tx.turn<-Beta_tx.turn %>% remove_rownames %>% column_to_rownames(var="X")
+Beta_tx.turn<-as.matrix(Beta_tx.turn)
+Beta_tx.turnLow<-lower.triangle(Beta_tx.turn)
+Beta_tx.turn2<-matrixConvert(Beta_tx.turn, colname=c("cell1", "cell2", "betatax.turn") )
+
+
+
+Beta_tx.ness<-read.csv("Betataxo_ness_index.csv", header=T) 
+Beta_tx.ness<-Beta_tx.ness %>% remove_rownames %>% column_to_rownames(var="X")
+Beta_tx.ness<-as.matrix(Beta_tx.ness)
+Beta_tx.nessLow<-lower.triangle(Beta_tx.ness)
+Beta_tx.ness2<-matrixConvert(Beta_tx.ness, colname=c("cell1", "cell2", "betatax.ness") )
+
+
+Beta_phy<-read.csv("phyloBetataxo_sor_index.csv", header=T) 
+Beta_phy<-Beta_phy %>% remove_rownames %>% column_to_rownames(var="X")
+Beta_phy<-as.matrix(Beta_phy)
+Beta_phyLow<-lower.triangle(Beta_phy)
+Beta_phy2<-matrixConvert(Beta_phy, colname=c("cell1", "cell2", "BetaPhy") )
+
+
+Beta_phy.turn<-read.csv("phyloBetataxo_turn_index.csv", header=T) 
+Beta_phy.turn<-Beta_phy.turn %>% remove_rownames %>% column_to_rownames(var="X")
+Beta_phy.turn<-as.matrix(Beta_phy.turn)
+Beta_phy.turnLow<-lower.triangle(Beta_phy.turn)
+Beta_phy.turn2<-matrixConvert(Beta_phy.turn, colname=c("cell1", "cell2", "BetaPhy.turn") )
+
+
+Beta_phy.ness<-read.csv("phyloBetataxo_ness_index.csv", header=T) 
+Beta_phy.ness<-Beta_phy.ness %>% remove_rownames %>% column_to_rownames(var="X")
+Beta_phy.ness<-as.matrix(Beta_phy.ness)
+Beta_phy.nessLow<-lower.triangle(Beta_phy.ness)
+Beta_phy.ness2<-matrixConvert(Beta_phy.ness, colname=c("cell1", "cell2", "BetaPhy.ness") )
+
+T_resDiv<-bind_cols(distGeo$comparacion,distGeo$dist,Resisbio6$bio6,Resisbio6DRes$bio6D, Beta_tx2$betatax, Beta_tx.turn2$betatax.turn, Beta_tx.ness2$betatax.ness,Beta_phy2$BetaPhy, Beta_phy.turn2$BetaPhy.turn,
+                    Beta_phy.ness2$BetaPhy.ness)
+colnames(T_resDiv)<-c("comparacion", "DGeo","Bio6","Bio6D", "Beta.tax", "Betatax.turn", "Betatax.ness", "Beta.phy", "Betaphy.turn",
+                      "Betaphy.ness", "Dnn", "Dpw" )
+T_resDiv <- na.omit(T_resDiv)
+write.csv(T_resDiv, "regresiones.csv")
+
+
+####Regresiones con hier.part#####
 
 
 library(usdm)
@@ -231,7 +360,6 @@ library(dplyr)
 library(hier.part)
 library("ggplot2")
 
-##Cargar los datos para las regresiones####
 T_resDiv=read.csv("recortadas.csv")
 
 
@@ -242,30 +370,15 @@ vif_results <- vifstep(env, th = 10)
 vif_cor=vifcor(env,th=10)
 
 
-##Cargar los datos para las regresiones##
-
-T_resDiv=read.csv("recortadas.csv")
-
-###Verificar que las variables cumplan el criterio de normalidad###
-
 NormalDgeo=shapiro.test(T_resDiv$Betaphy.ness)
 print(NormalDgeo)
 
-##Graficar la forma de la distribución###
 plot(density(T_resDiv$Beta.tax), main="Density Plot")
 
-Grafica ern formato QQ para ver cuales son los puntos que desvian###
 qqnorm(T_resDiv$Beta.tax, main = "Normal Q-Q Plot")
 qqline(T_resDiv$Beta.tax, col = "red", lwd = 2)
 
-#Primero, del dataframe que contiene los datos para las 
-
 env <- T_resDiv[,3:10] 
-
-###Asumiendo una distribucion gamma
-
-gofs=all.regs(T_resDiv$Beta.tax, env, fam = "Gamma", gof = "RMSPE",
-              print.vars = TRUE)
 
 ### una distribucion Gaussiana
 
@@ -300,6 +413,22 @@ ggplot(betataxgraph,aes(fill=Variable, y=Variance,x=Estimator))+geom_bar(positio
         axis.title.y = element_text(size = 8), legend.title = element_text(size = 8), 
         legend.text = element_text(size = 8, colour = "black"), 
         axis.text.y = element_text(colour = "black", size = 8))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
